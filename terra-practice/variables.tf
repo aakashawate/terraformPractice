@@ -27,3 +27,16 @@ variable "region" {
   type        = string
   default     = "us-east-1"
 }
+
+
+variable "ami" {
+  description = "AMI for EC2 instances"
+  type        = string
+  default     = "ami-12345678"  # Replace with your desired AMI ID
+}
+
+variable "instance_type" {
+  description = "Instance type for EC2 instances"
+  type        = string
+  default     = "t2.micro"  # Replace with your desired instance type
+}
