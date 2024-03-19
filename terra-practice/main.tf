@@ -1,7 +1,6 @@
-
 # Create VPC
 resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr_block
+  cidr_block           = "10.1.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
   tags = {
@@ -14,63 +13,62 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 }
 
-# Create public subnets
-resource "aws_subnet" "public_subnet_1" {
+# Create public subnet
+resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidr_blocks[0]
-  availability_zone       = var.availability_zones[0]
+  cidr_block              = "10.1.0.0/24"
+  availability_zone       = "us-east-1a" # Choose the appropriate AZ
   map_public_ip_on_launch = true
   tags = {
-    Name = "public-subnet-1"
+    Name = "public-subnet"
   }
 }
 
-resource "aws_subnet" "public_subnet_2" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidr_blocks[1]
-  availability_zone       = var.availability_zones[1]
-  map_public_ip_on_launch = true
-  tags = {
-    Name = "public-subnet-2"
-  }
-}
-
-# Create private subnets
-resource "aws_subnet" "private_subnet_1" {
+# Create private subnet
+resource "aws_subnet" "private_subnet" {
   vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private_subnet_cidr_blocks[0]
-  availability_zone = var.availability_zones[0]
+  cidr_block        = "10.1.1.0/24"
+  availability_zone = "us-east-1a" # Choose the appropriate AZ
   tags = {
-    Name = "private-subnet-1"
+    Name = "private-subnet"
   }
 }
 
-resource "aws_subnet" "private_subnet_2" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private_subnet_cidr_blocks[1]
-  availability_zone = var.availability_zones[1]
-  tags = {
-    Name = "private-subnet-2"
+# Create route table for public subnet
+resource "aws_route_table" "public_route_table" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
   }
+
+  tags = {
+    Name = "public-route-table"
+  }
+}
+
+# Associate public subnet with public route table
+resource "aws_route_table_association" "public_subnet_association" {
+  subnet_id      = aws_subnet.public_subnet.id
+  route_table_id = aws_route_table.public_route_table.id
 }
 
 # Create NAT gateway
-resource "aws_eip" "nat_eip" {
-  domain = "vpc"
-}
+resource "aws_eip" "nat_eip" {}
 
 resource "aws_nat_gateway" "nat_gateway" {
   allocation_id = aws_eip.nat_eip.id
-  subnet_id     = aws_subnet.public_subnet_1.id
+  subnet_id     = aws_subnet.public_subnet.id
 }
 
-# Create route table for private subnets
+# Create route table for private subnet
 resource "aws_route_table" "private_route_table" {
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_nat_gateway.nat_gateway.id
+    nat_gateway_id = aws_nat_gateway.nat_gateway.id
   }
 
   tags = {
@@ -78,29 +76,56 @@ resource "aws_route_table" "private_route_table" {
   }
 }
 
-# Associate private subnets with private route table
-resource "aws_route_table_association" "private_subnet_1_association" {
-  subnet_id      = aws_subnet.private_subnet_1.id
+# Associate private subnet with private route table
+resource "aws_route_table_association" "private_subnet_association" {
+  subnet_id      = aws_subnet.private_subnet.id
   route_table_id = aws_route_table.private_route_table.id
 }
 
-resource "aws_route_table_association" "private_subnet_2_association" {
-  subnet_id      = aws_subnet.private_subnet_2.id
-  route_table_id = aws_route_table.private_route_table.id
+# Create security group for SSH access
+resource "aws_security_group" "ssh_access" {
+  name        = "ssh_access"
+  description = "Allow SSH inbound traffic"
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  vpc_id = aws_vpc.main.id 
 }
 
-# EC2 instance in public subnet
+# Create EC2 instance in public subnet
 resource "aws_instance" "public_instance" {
-  ami           = var.ami
-  instance_type = var.instance_type
-  subnet_id     = aws_subnet.public_subnet_1.id
-
+  ami             = var.ami
+  instance_type   = var.instance_type
+  subnet_id       = aws_subnet.public_subnet.id
+  vpc_security_group_ids = [aws_security_group.ssh_access.id]  # Change here
+  key_name        = "test"  # Replace with your key pair name
+  tags = {
+    Name = "public-instance"
+  }
+  # Add other configuration settings as needed
 }
 
-# EC2 instance in private subnet
+# Create EC2 instance in private subnet
 resource "aws_instance" "private_instance" {
-  ami           = var.ami
-  instance_type = var.instance_type
-  subnet_id     = aws_subnet.private_subnet_1.id
+  ami             = var.ami
+  instance_type   = var.instance_type
+  subnet_id       = aws_subnet.private_subnet.id
+  vpc_security_group_ids = [aws_security_group.ssh_access.id]  # Change here
+  key_name        = "test"  # Replace with your key pair name
+  tags = {
+    Name = "private-instance"
+  }
   # Add other configuration settings as needed
 }

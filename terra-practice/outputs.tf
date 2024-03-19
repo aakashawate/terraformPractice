@@ -1,6 +1,5 @@
-output "vpc_id" {
-  value = aws_vpc.main.id
-}
+# outputs.tf
+
 output "public_instance_id" {
   value = aws_instance.public_instance.id
 }
