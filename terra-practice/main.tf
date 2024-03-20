@@ -1,3 +1,9 @@
+# Create key pair
+#resource "aws_key_pair" "my_key_pair" {
+#  key_name   = "my-key-pair"  # Name for the key pair
+#  public_key = file("/workspaces/terraformPractice/terra-practice/my-key-pair.pub")  # Path to the public key file
+#}
+
 # Create VPC
 resource "aws_vpc" "main" {
   cidr_block           = "10.1.0.0/16"
@@ -109,12 +115,30 @@ resource "aws_instance" "public_instance" {
   ami             = var.ami
   instance_type   = var.instance_type
   subnet_id       = aws_subnet.public_subnet.id
-  vpc_security_group_ids = [aws_security_group.ssh_access.id]  # Change here
-  key_name        = "test"  # Replace with your key pair name
+  vpc_security_group_ids = [aws_security_group.ssh_access.id]
+  key_name        = "terraform-test"
   tags = {
     Name = "public-instance"
   }
-  # Add other configuration settings as needed
+  
+  connection {
+    type        = "ssh"
+    user        = "ec2-user"
+    private_key = file("terraform-test.pem")
+    host        = self.public_ip
+  }
+
+  provisioner "file" {
+    source      = "terraform-test.pem"
+    destination = "/home/ec2-user/terraform-test.pem"
+  }
+  
+  # Add provisioner to change key file permissions after file copy
+  provisioner "remote-exec" {
+    inline = [
+      "sudo chmod 400 /home/ec2-user/terraform-test.pem",  # Change permissions to 400
+    ]
+  }
 }
 
 # Create EC2 instance in private subnet
@@ -122,10 +146,12 @@ resource "aws_instance" "private_instance" {
   ami             = var.ami
   instance_type   = var.instance_type
   subnet_id       = aws_subnet.private_subnet.id
-  vpc_security_group_ids = [aws_security_group.ssh_access.id]  # Change here
-  key_name        = "test"  # Replace with your key pair name
+  vpc_security_group_ids = [aws_security_group.ssh_access.id]
+  key_name        = "terraform-test"
   tags = {
     Name = "private-instance"
   }
+
   # Add other configuration settings as needed
 }
+
